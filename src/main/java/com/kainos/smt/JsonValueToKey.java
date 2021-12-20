@@ -11,7 +11,7 @@ import java.util.Optional;
 
 import static org.apache.kafka.connect.transforms.util.Requirements.requireMap;
 
-public class JsonToMap<R extends ConnectRecord<R>> implements Transformation<R> {
+public class JsonValueToKey<R extends ConnectRecord<R>> implements Transformation<R> {
     public static final String OVERVIEW_DOC = "Extract json field and insert it into record key";
     private static final String PURPOSE = "transforming json string into map";
 
@@ -32,17 +32,10 @@ public class JsonToMap<R extends ConnectRecord<R>> implements Transformation<R> 
 
     @Override
     public R apply(R record) {
-        String a = "";
-        Object b = record.value();
-        Map<String, ?> jsonMap = new JSONObject(record.value()).toMap();
-        final Map<String, ?> valueJson = requireMap(jsonMap, PURPOSE);
-
-        Object updatedKey = Optional.ofNullable(jsonMap.get("country"))
+        String value = (String) record.value();
+        JSONObject json = new JSONObject(value);
+        Object updatedKey = Optional.ofNullable(json.getJSONObject("payload").getString("country"))
                 .orElseThrow(() -> new NoSuchElementException("Element not found"));
-
-        if (!(updatedKey instanceof String)) {
-            throw new IllegalArgumentException("Excepted type String, got " +updatedKey.getClass().getTypeName());
-        }
 
         return newRecord(record, updatedKey);
     }
