@@ -1,24 +1,36 @@
 package com.kainos.smt;
 
+import com.jayway.jsonpath.JsonPath;
+import com.jayway.jsonpath.ReadContext;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.transforms.Transformation;
-import org.json.JSONObject;
+import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 
-import static org.apache.kafka.connect.transforms.util.Requirements.requireMap;
+import static com.kainos.smt.TypeSafetyHelper.requireString;
 
 public class JsonValueToKey<R extends ConnectRecord<R>> implements Transformation<R> {
     public static final String OVERVIEW_DOC = "Extract json field and insert it into record key";
-    private static final String PURPOSE = "transforming json string into map";
+    public static final String PURPOSE = "extracting json field and inserting it into record key";
 
-    public static final ConfigDef CONFIG_DEF = new ConfigDef();
+    private interface ConfigName {
+        String FIELD = "field";
+    }
+
+    public static final ConfigDef CONFIG_DEF = new ConfigDef()
+            .define(ConfigName.FIELD, ConfigDef.Type.STRING, "payload.country", ConfigDef.Importance.HIGH,
+                    "which json field to move as key (in string format)");
+    private String jsonField;
+
 
     @Override
     public void configure(Map<String, ?> props) {
+        final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
+        jsonField = config.getString(ConfigName.FIELD);
     }
 
     @Override
@@ -32,10 +44,11 @@ public class JsonValueToKey<R extends ConnectRecord<R>> implements Transformatio
 
     @Override
     public R apply(R record) {
-        String value = (String) record.value();
-        JSONObject json = new JSONObject(value);
-        Object updatedKey = Optional.ofNullable(json.getJSONObject("payload").getString("country"))
-                .orElseThrow(() -> new NoSuchElementException("Element not found"));
+        String value = requireString(record.value(), PURPOSE);
+        ReadContext ctx = JsonPath.parse(value);
+        Object updatedKey = Optional.ofNullable(ctx.read("$." + jsonField))
+                .orElseThrow(() -> new NoSuchElementException("Element not found: " + jsonField));
+        updatedKey = requireString(updatedKey, PURPOSE);
 
         return newRecord(record, updatedKey);
     }
