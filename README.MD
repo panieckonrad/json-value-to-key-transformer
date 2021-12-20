@@ -1,15 +1,17 @@
-Kafka Connect SMT to for moving record value field (must be JSON string) to record key (String)
+Kafka Connect SMT for moving record value field (must be JSON string) to record key.
 
 Useful for partitioning records coming from RABBITMQ queues which contain JSON strings. </br>
 Properties:
 
 |Name|Description|Type|Default|Importance|
 |---|---|---|---|---|
-|`field`| json field which is supposed to be kafka record key | String | `"payload.country"` | High |
+|`fields`| json fields which are supposed to be in kafka record key | String | None | High |
 
 Example on how to add to your connector:
 ```
-      "transforms":"jsonvaluetokey",
-      "transforms.jsonvaluetokey.type":"com.kainos.smt.JsonValueToKey",
-      "transforms.jsonvaluetokey.field":"payload.country"
+        "transforms":"jsonValueToKey",
+        "transforms.jsonValueToKey.type":"com.kainos.smt.JsonValueToKey",
+        "transforms.jsonValueToKey.fields":"payload.country,producer"
 ```
+
+Copy 'json-value-to-key-1.0-SNAPSHOT-jar-with-dependencies.jar' to your kafka connect cluster.

@@ -5,11 +5,10 @@ import com.jayway.jsonpath.ReadContext;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.transforms.Transformation;
+import org.apache.kafka.connect.transforms.util.NonEmptyListValidator;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
-import java.util.Map;
-import java.util.NoSuchElementException;
-import java.util.Optional;
+import java.util.*;
 
 import static com.kainos.smt.TypeSafetyHelper.requireString;
 
@@ -18,19 +17,19 @@ public class JsonValueToKey<R extends ConnectRecord<R>> implements Transformatio
     public static final String PURPOSE = "extracting json field and inserting it into record key";
 
     private interface ConfigName {
-        String FIELD = "field";
+        String FIELD = "fields";
     }
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
-            .define(ConfigName.FIELD, ConfigDef.Type.STRING, "payload.country", ConfigDef.Importance.HIGH,
-                    "which json field to move as key (in string format)");
-    private String jsonField;
+            .define(ConfigName.FIELD, ConfigDef.Type.LIST, ConfigDef.NO_DEFAULT_VALUE, new NonEmptyListValidator(), ConfigDef.Importance.HIGH,
+                    "Field names on the record value to extract as the record key.");
+    private List<String> jsonFields;
 
 
     @Override
     public void configure(Map<String, ?> props) {
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
-        jsonField = config.getString(ConfigName.FIELD);
+        jsonFields = config.getList(ConfigName.FIELD);
     }
 
     @Override
@@ -46,11 +45,17 @@ public class JsonValueToKey<R extends ConnectRecord<R>> implements Transformatio
     public R apply(R record) {
         String value = requireString(record.value(), PURPOSE);
         ReadContext ctx = JsonPath.parse(value);
-        Object updatedKey = Optional.ofNullable(ctx.read("$." + jsonField))
-                .orElseThrow(() -> new NoSuchElementException("Element not found: " + jsonField));
-        updatedKey = requireString(updatedKey, PURPOSE);
+        final Map<String, Object> key = new HashMap<>(jsonFields.size());
+        for (String field : jsonFields) {
+            key.put(field.replace('.', '_'), extractField(ctx, field));
+        }
 
-        return newRecord(record, updatedKey);
+        return newRecord(record, key);
+    }
+
+    private Object extractField(ReadContext ctx, String field) {
+        return Optional.of(ctx.read("$." + field))
+                .orElseThrow(() -> new NoSuchElementException("Element not found: " + field));
     }
 
     protected R newRecord(R record, Object updatedKey) {
